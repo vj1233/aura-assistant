@@ -93,7 +93,7 @@ class GeminiBridge:
                     method="POST"
                 )
 
-                with urllib.request.urlopen(req, timeout=12) as response:
+                with urllib.request.urlopen(req, timeout=45) as response:
                     result = json.loads(response.read().decode("utf-8"))
                     candidates = result.get("candidates", [])
                     if not candidates:
