@@ -6,21 +6,23 @@
   <title>AURA // Retro AI Assistant</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0d0f12">
+  <meta name="theme-color" content="#060911">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
-<body class="theme-scanlines">
+<body class="theme-scanlines is-offline">
   <div class="device-frame">
     <!-- Header / Status Bar -->
     <header class="status-bar">
       <div class="status-indicator">
         <span class="pixel-dot" id="connection-dot"></span>
-        <span id="connection-text">LINK: OFFLINE</span>
+        <span class="sys-title">AURA // AI</span>
       </div>
-      <div class="battery-readout">
-        <span id="model-badge">GEMINI FLASH</span>
+      <div class="audio-wave-bars">
+        <span class="bar b1"></span>
+        <span class="bar b2"></span>
+        <span class="bar b3"></span>
       </div>
     </header>
 
@@ -60,8 +62,8 @@
 
       <!-- Dialogue / Subtitles readout -->
       <div class="terminal-log" id="terminal-log">
-        <div class="log-title">&gt; SYSTEM READY</div>
-        <div class="log-subtext" id="log-text">Tap anywhere or tap MIC to speak</div>
+        <div class="log-title">&gt; READY</div>
+        <div class="log-subtext" id="log-text">Say "AURA, check my IP"</div>
         <div class="log-details" id="log-details" style="display: none;"></div>
       </div>
     </main>
@@ -70,27 +72,18 @@
     <footer class="action-deck">
       <button class="retro-btn mic-btn" id="mic-btn" aria-label="Microphone">
         <span class="btn-icon">🎙️</span>
-        <span class="btn-label" id="mic-label">TAP TO TALK</span>
+        <span class="btn-label" id="mic-label">WAKE WORD: "AURA"</span>
       </button>
-
-      <div class="deck-row">
-        <button class="retro-btn secondary-btn" id="test-btn">
-          TEST COMMAND
-        </button>
-        <button class="retro-btn secondary-btn" id="settings-btn">
-          SETTINGS
-        </button>
-      </div>
     </footer>
   </div>
 
-  <!-- Settings Modal -->
+  <!-- Settings Modal (Triggered by voice: "Aura, open settings") -->
   <div class="modal hidden" id="settings-modal">
     <div class="modal-content">
       <h2 class="modal-title">&gt; CONFIGURATION</h2>
       
       <label for="agent-url" class="field-label">LAPTOP AGENT URL:</label>
-      <input type="text" id="agent-url" class="retro-input" placeholder="http://192.168.1.100:5000">
+      <input type="text" id="agent-url" class="retro-input" placeholder="http://192.168.31.38:5000">
 
       <label for="voice-toggle" class="field-checkbox-label">
         <input type="checkbox" id="voice-toggle" checked>

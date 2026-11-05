@@ -80,14 +80,53 @@ html, body {
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.pixel-dot.online {
-  background-color: var(--phosphor-blue);
-  box-shadow: 0 0 8px var(--phosphor-blue);
+/* Offline Red Theme Overrides */
+body.is-offline {
+  --phosphor-blue: #ff2a4b;
+  --phosphor-core: #ff6b82;
+  --phosphor-cyan: #ff4d6d;
+  --phosphor-dim: #4d0a15;
+  --screen-bg: #140407;
 }
 
-.battery-readout {
-  color: var(--phosphor-core);
-  text-shadow: 0 0 8px rgba(0, 212, 255, 0.8);
+body.is-offline .crt-screen {
+  background: radial-gradient(circle at center, #26080e 0%, #0c0204 100%);
+  border-color: #55141f;
+  box-shadow: inset 0 0 30px rgba(255, 42, 75, 0.25), inset 0 0 15px rgba(0, 0, 0, 0.9);
+}
+
+body.is-offline .device-frame {
+  box-shadow: 0 0 35px rgba(255, 42, 75, 0.25), inset 0 0 15px rgba(0, 0, 0, 0.8);
+  border-color: #38151c;
+}
+
+body.is-offline .pixel-dot {
+  background-color: var(--phosphor-red);
+  box-shadow: 0 0 10px var(--phosphor-red);
+}
+
+/* Audio wave bars in status header */
+.audio-wave-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 12px;
+}
+
+.audio-wave-bars .bar {
+  width: 3px;
+  height: 4px;
+  background-color: var(--phosphor-blue);
+  box-shadow: 0 0 4px var(--phosphor-blue);
+  animation: wave-bar 1.2s infinite ease-in-out;
+}
+
+.audio-wave-bars .bar.b2 { animation-delay: 0.2s; }
+.audio-wave-bars .bar.b3 { animation-delay: 0.4s; }
+
+@keyframes wave-bar {
+  0%, 100% { height: 3px; }
+  50% { height: 12px; }
 }
 
 /* CRT Screen */
