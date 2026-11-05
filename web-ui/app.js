@@ -1,6 +1,6 @@
 /**
  * AURA // Retro AI Assistant - Smart Conversational Engine for Vijay
- * Engineered for Rock-Solid Reliability on Android 8.1+ & Desktop
+ * Desk-Mode 24/7 Hands-Free Controller for Android 8.1+ & Desktop
  */
 
 // 6x6 Matrix Patterns for Expressive Pixel Eyes
@@ -70,6 +70,7 @@ class AuraRobot {
     this.ttsEnabled = localStorage.getItem('aura_tts') !== 'false';
     this.isSpeaking = false;
     this.isProcessing = false;
+    this.deskModeActive = false;
     this.audioUnlocked = false;
 
     // DOM Elements
@@ -115,9 +116,6 @@ class AuraRobot {
     this.startBlinkLoop();
     this.setupEventListeners();
     this.checkAgentConnection();
-
-    // Start listening on boot
-    setTimeout(() => this.restartListener(), 800);
 
     // Heartbeat every 8s
     setInterval(() => this.checkAgentConnection(), 8000);
@@ -182,12 +180,15 @@ class AuraRobot {
       case 'idle':
         this.renderEyes('idle');
         this.micBtn.classList.remove('listening');
-        this.micLabel.textContent = 'LISTENING: SAY "AURA"';
+        if (this.deskModeActive) {
+          this.micLabel.textContent = '🟢 DESK MODE: LISTENING';
+        } else {
+          this.micLabel.textContent = 'TAP TO START DESK MODE';
+        }
         this.startBlinkLoop();
         break;
 
       case 'waiting_command':
-        // AURA is actively waiting for Vijay's command!
         this.stopBlinkLoop();
         this.renderEyes('listening');
         this.micBtn.classList.add('listening');
@@ -199,7 +200,7 @@ class AuraRobot {
         // 8-second watchdog: if no command received, return to idle
         this.watchdogTimer = setTimeout(() => {
           if (this.state === 'waiting_command') {
-            this.setState('idle', 'READY', 'Say "Aura" anytime');
+            this.setState('idle', 'READY', 'Listening for your voice...');
             this.restartListener();
           }
         }, 8000);
@@ -281,7 +282,6 @@ class AuraRobot {
     if (this.blinkTimer) clearTimeout(this.blinkTimer);
   }
 
-  // Ensure Audio Context is unlocked on mobile
   unlockAudioContext() {
     if (this.audioUnlocked) return;
     try {
@@ -292,13 +292,69 @@ class AuraRobot {
     } catch (e) {}
   }
 
-  // Safe Listener Loop (Avoids Android 8.1 Zombie State)
+  // Activate Desk Mode: Fullscreen + WakeLock (Never sleeps) + Continuous Mic
+  async activateDeskMode() {
+    this.deskModeActive = true;
+    this.unlockAudioContext();
+
+    // 1. Enter Fullscreen on mobile
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        await document.documentElement.webkitRequestFullscreen();
+      }
+    } catch (e) {
+      console.warn('Fullscreen request:', e);
+    }
+
+    // 2. Prevent screen from sleeping (WakeLock API)
+    try {
+      if ('wakeLock' in navigator) {
+        await navigator.wakeLock.request('screen');
+        console.log('Screen WakeLock active');
+      }
+    } catch (e) {
+      console.warn('WakeLock request:', e);
+    }
+
+    // 3. Keep hardware microphone open continuously using Web Audio
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          const audioCtx = new AudioContext();
+          const source = audioCtx.createMediaStreamSource(stream);
+          const gain = audioCtx.createGain();
+          gain.gain.value = 0; // Mute local monitor loop
+          source.connect(gain);
+          gain.connect(audioCtx.destination);
+        }
+      }
+    } catch (e) {
+      console.warn('MediaStream lock:', e);
+    }
+
+    this.setState('idle', 'DESK MODE ACTIVE', 'Say "Aura" or any command...');
+    this.micLabel.textContent = '🟢 DESK MODE: ACTIVE';
+    
+    this.speak("Aura desk mode activated. I am listening.", () => {
+      this.restartListener();
+    });
+  }
+
+  // Safe Continuous Listener Loop
   restartListener() {
-    // If speaking or processing, wait until finished
+    if (!this.deskModeActive) return;
     if (this.isSpeaking || this.isProcessing) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      this.logTitle.textContent = '> VOICE NOT SUPPORTED';
+      this.logText.textContent = 'Tap to type commands';
+      return;
+    }
 
     try {
       if (this.recognition) {
@@ -310,10 +366,8 @@ class AuraRobot {
       }
 
       this.recognition = new SpeechRecognition();
-      // On mobile Android, continuous=false with auto-loop is 10x more stable than continuous=true!
       this.recognition.continuous = false;
       this.recognition.interimResults = false;
-      // en-IN recognizes 'AW-ruh', Indian English phonetics and pronunciation accurately
       this.recognition.lang = localStorage.getItem('aura_lang') || 'en-IN';
 
       this.recognition.onstart = () => {
@@ -328,7 +382,6 @@ class AuraRobot {
 
       this.recognition.onerror = (event) => {
         this.isListeningActive = false;
-        // Ignore normal no-speech timeouts, just restart
         if (event.error !== 'no-speech' && event.error !== 'aborted') {
           console.warn('Speech recognition error:', event.error);
         }
@@ -336,9 +389,8 @@ class AuraRobot {
 
       this.recognition.onend = () => {
         this.isListeningActive = false;
-        // Auto-loop: immediately re-listen if not speaking or processing
-        if (!this.isSpeaking && !this.isProcessing) {
-          setTimeout(() => this.restartListener(), 300);
+        if (this.deskModeActive && !this.isSpeaking && !this.isProcessing) {
+          setTimeout(() => this.restartListener(), 250);
         }
       };
 
@@ -350,16 +402,31 @@ class AuraRobot {
     }
   }
 
-  // Process any speech heard
+  // Process any speech heard with immediate live visual feedback
   handleHeardSpeech(rawText) {
     const text = rawText.trim();
+    if (!text) {
+      this.restartListener();
+      return;
+    }
+
     const lower = text.toLowerCase();
 
-    // Check for Wake Word variations: "aura", "awra", "awruh", "ora", "ara", "aara", "aurora"
+    // 1. LIVE VISUAL FEEDBACK: Show the exact words on screen immediately!
+    this.logTitle.textContent = '> HEARD YOU SAY';
+    this.logText.textContent = `"${text}"`;
+
+    // Check for Wake Word variations
     const wakePattern = /(?:hey\s+)?(?:aura|awra|awruh|aw-ruh|ora|ara|aara|aur|aurora|order|auto)/i;
     const hasWakeWord = wakePattern.test(lower);
 
-    // CASE 1: Currently waiting for a command after waking
+    // Check for direct actionable command keywords
+    const isDirectCommand = [
+      "ip", "terminal", "notepad", "calculator", "calc", "open", 
+      "ping", "dir", "lock", "volume", "status", "whoami", "cmd", "powershell"
+    ].some(kw => lower.includes(kw));
+
+    // CASE 1: Currently waiting for command after greeting
     if (this.state === 'waiting_command') {
       clearTimeout(this.watchdogTimer);
       if (lower.includes('settings')) {
@@ -371,13 +438,12 @@ class AuraRobot {
       return;
     }
 
-    // CASE 2: Wake-word detected!
+    // CASE 2: Wake Word Detected
     if (hasWakeWord) {
-      // Extract whatever command was spoken in the SAME sentence (e.g. "Aura check my IP")
       const afterWake = lower.replace(wakePattern, '').replace(/^[,.\s]+/, '').trim();
 
       if (afterWake.length > 1) {
-        // Full command spoken together! E.g. "Aura check my IP"
+        // Full command said together: "Aura check my IP"
         if (afterWake.includes('settings')) {
           this.openSettings();
         } else {
@@ -385,17 +451,28 @@ class AuraRobot {
           this.processCommand(afterWake);
         }
       } else {
-        // Just "Aura" was spoken! Prompt with greeting
-        this.setState('waiting_command', 'AURA READY', 'Listening for your command...');
-        this.speak("Yes? What can I do for you?", () => {
+        // Just "Aura" was said! Prompt Vijay
+        this.setState('waiting_command', 'AURA READY', 'Yes Vijay? I am listening...');
+        this.speak("Yes Vijay? What can I do for you?", () => {
           this.restartListener();
         });
       }
       return;
     }
 
-    // Fallback: If not waiting and no wake word, just keep listening
-    this.restartListener();
+    // CASE 3: Direct command spoken without saying "Aura"
+    if (isDirectCommand) {
+      if (lower.includes('settings')) {
+        this.openSettings();
+      } else {
+        this.setState('thinking', 'COMMAND RECEIVED', `"${text}"`);
+        this.processCommand(text);
+      }
+      return;
+    }
+
+    // Otherwise, resume listening loop
+    setTimeout(() => this.restartListener(), 400);
   }
 
   // Send command to Laptop Agent
@@ -429,7 +506,7 @@ class AuraRobot {
         this.setState('happy', 'COMPLETE', speechMsg);
         this.isProcessing = false;
         setTimeout(() => {
-          this.setState('idle', 'READY', 'Say "AURA" anytime');
+          this.setState('idle', 'DESK MODE ACTIVE', 'Say "Aura" or any command');
           this.restartListener();
         }, 3000);
       });
@@ -460,7 +537,7 @@ class AuraRobot {
       if (onComplete) onComplete();
     };
 
-    // Method 1: Hardware-direct MP3 Stream (Bypasses Android 8.1 SpeechSynthesis bugs)
+    // Method 1: Hardware-direct MP3 Stream
     try {
       if (this.currentAudio) {
         try { this.currentAudio.pause(); } catch(e) {}
@@ -486,7 +563,6 @@ class AuraRobot {
     }
   }
 
-  // Method 2: Offline Native SpeechSynthesis with Chromium GC protection
   fallbackNativeSpeech(text, finish) {
     if (!window.speechSynthesis) {
       finish();
@@ -499,7 +575,6 @@ class AuraRobot {
       utterance.rate = 1.0;
       utterance.pitch = 1.1;
 
-      // Retain global reference to avoid Chromium garbage collection bug
       window.__activeUtterance = utterance;
 
       utterance.onend = finish;
@@ -511,7 +586,6 @@ class AuraRobot {
     }
   }
 
-  // Voice Settings Dialog
   openSettings() {
     this.agentUrlInput.value = this.agentUrl;
     this.voiceToggle.checked = this.ttsEnabled;
@@ -524,13 +598,12 @@ class AuraRobot {
 
   closeSettings() {
     this.settingsModal.classList.add('hidden');
-    this.setState('idle', 'READY', 'Say "Aura, check my IP"');
+    this.setState('idle', 'DESK MODE ACTIVE', 'Say "Aura, check my IP"');
     this.speak('Settings closed, Vijay.', () => {
       this.restartListener();
     });
   }
 
-  // Heartbeat check: Red if offline, Blue if online
   async checkAgentConnection() {
     try {
       const res = await fetch(`${this.agentUrl}/api/health`, { method: 'GET', mode: 'cors' });
@@ -556,26 +629,18 @@ class AuraRobot {
   }
 
   setupEventListeners() {
-    // Tapping anywhere unlocks audio on mobile and resets listener
-    const handleTap = (e) => {
-      this.unlockAudioContext();
-      if (this.isProcessing) return;
-
-      if (this.state === 'idle') {
-        // Direct conversation starter:
-        this.setState('waiting_command', 'AURA READY', 'Yes Vijay? I am listening...');
-        this.speak("Yes Vijay? What can I do for you?", () => {
-          this.restartListener();
-        });
+    const handleActivate = (e) => {
+      e.preventDefault();
+      if (!this.deskModeActive) {
+        this.activateDeskMode();
       } else {
         this.restartListener();
       }
     };
 
-    this.micBtn.addEventListener('click', handleTap);
-    this.faceContainer.addEventListener('click', handleTap);
+    this.micBtn.addEventListener('click', handleActivate);
+    this.faceContainer.addEventListener('click', handleActivate);
 
-    // Tap on terminal log to type manual fallback
     const logBox = document.getElementById('terminal-log');
     if (logBox) {
       logBox.addEventListener('click', (e) => {
@@ -584,7 +649,6 @@ class AuraRobot {
       });
     }
 
-    // Settings actions
     this.closeSettingsBtn.addEventListener('click', () => this.closeSettings());
 
     this.saveSettingsBtn.addEventListener('click', () => {
