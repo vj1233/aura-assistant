@@ -3,6 +3,8 @@ import sys
 import json
 import socket
 import logging
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 # Load local modules
@@ -61,9 +63,17 @@ def print_banner(port: int):
 """
     print(banner)
 
+def fetch_tts_audio(text: str) -> bytes:
+    """Fetches high-clarity voice MP3 audio for speaker output."""
+    encoded_text = urllib.parse.quote(text)
+    url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl=en-IN&client=tw-ob&q={encoded_text}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=6) as resp:
+        return resp.read()
+
 # Try importing Flask; if not available, provide built-in http.server fallback
 try:
-    from flask import Flask, request, jsonify, send_from_directory
+    from flask import Flask, request, jsonify, send_from_directory, Response
     from flask_cors import CORS
 
     app = Flask(__name__, static_folder=str(WEB_UI_DIR))
@@ -84,6 +94,18 @@ try:
             "is_windows": executor.is_windows,
             "gemini_ready": bool(gemini.api_key)
         })
+
+    @app.route("/api/tts", methods=["GET"])
+    def tts_stream():
+        text = request.args.get("text", "").strip()
+        if not text:
+            return "Missing text", 400
+        try:
+            audio_data = fetch_tts_audio(text)
+            return Response(audio_data, mimetype="audio/mpeg")
+        except Exception as e:
+            logger.error(f"TTS stream error: {e}")
+            return str(e), 500
 
     @app.route("/api/process", methods=["POST"])
     def process_command():
@@ -106,14 +128,13 @@ try:
 except ImportError:
     # ----------------- Standard Library HTTP Server Fallback -----------------
     import http.server
-    import mimetypes
+    import urllib.parse
 
     class AuraHttpHandler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(WEB_UI_DIR), **kwargs)
 
         def end_headers(self):
-            # Enable CORS
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
@@ -135,6 +156,24 @@ except ImportError:
                     "gemini_ready": bool(gemini.api_key)
                 })
                 self.wfile.write(res.encode("utf-8"))
+            elif self.path.startswith("/api/tts"):
+                query = urllib.parse.urlparse(self.path).query
+                params = urllib.parse.parse_qs(query)
+                text = params.get("text", [""])[0]
+                if not text:
+                    self.send_response(400)
+                    self.end_headers()
+                    return
+                try:
+                    audio_data = fetch_tts_audio(text)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "audio/mpeg")
+                    self.end_headers()
+                    self.wfile.write(audio_data)
+                except Exception as e:
+                    logger.error(f"TTS fetch error: {e}")
+                    self.send_response(500)
+                    self.end_headers()
             else:
                 super().do_GET()
 

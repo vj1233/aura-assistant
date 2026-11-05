@@ -445,9 +445,9 @@ class AuraRobot {
     }
   }
 
-  // Text-to-Speech Output with active flag
+  // Audio Speaker Output (Hardware MP3 Stream + Native Fallback)
   speak(text, onComplete = null) {
-    if (!this.ttsEnabled || !window.speechSynthesis) {
+    if (!this.ttsEnabled) {
       if (onComplete) onComplete();
       return;
     }
@@ -455,24 +455,59 @@ class AuraRobot {
     this.isSpeaking = true;
     this.unlockAudioContext();
 
+    const finish = () => {
+      this.isSpeaking = false;
+      if (onComplete) onComplete();
+    };
+
+    // Method 1: Hardware-direct MP3 Stream (Bypasses Android 8.1 SpeechSynthesis bugs)
+    try {
+      if (this.currentAudio) {
+        try { this.currentAudio.pause(); } catch(e) {}
+      }
+      const ttsUrl = `${this.agentUrl}/api/tts?text=${encodeURIComponent(text)}`;
+      const audio = new Audio(ttsUrl);
+      this.currentAudio = audio;
+      
+      audio.onended = finish;
+      audio.onerror = () => {
+        this.fallbackNativeSpeech(text, finish);
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Audio play catch:', err);
+          this.fallbackNativeSpeech(text, finish);
+        });
+      }
+    } catch (err) {
+      this.fallbackNativeSpeech(text, finish);
+    }
+  }
+
+  // Method 2: Offline Native SpeechSynthesis with Chromium GC protection
+  fallbackNativeSpeech(text, finish) {
+    if (!window.speechSynthesis) {
+      finish();
+      return;
+    }
     try {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 1.1; // Friendly robotic pitch
+      utterance.lang = localStorage.getItem('aura_lang') || 'en-IN';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.1;
 
-      const finishSpeech = () => {
-        this.isSpeaking = false;
-        if (onComplete) onComplete();
-      };
+      // Retain global reference to avoid Chromium garbage collection bug
+      window.__activeUtterance = utterance;
 
-      utterance.onend = finishSpeech;
-      utterance.onerror = finishSpeech;
+      utterance.onend = finish;
+      utterance.onerror = finish;
 
       window.speechSynthesis.speak(utterance);
     } catch (e) {
-      this.isSpeaking = false;
-      if (onComplete) onComplete();
+      finish();
     }
   }
 

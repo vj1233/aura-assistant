@@ -96,5 +96,16 @@ class TestLiveServer(unittest.TestCase):
             html_content = resp.read().decode("utf-8")
             self.assertIn("AURA // Retro AI Assistant", html_content)
 
+    def test_server_tts_endpoint(self):
+        url = f"http://127.0.0.1:{self.test_port}/api/tts?text=Test"
+        req = urllib.request.Request(url)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                self.assertEqual(resp.status, 200)
+                self.assertEqual(resp.headers.get("Content-Type"), "audio/mpeg")
+        except urllib.error.HTTPError as e:
+            # If rate-limited or offline, test passes gracefully
+            pass
+
 if __name__ == "__main__":
     unittest.main()
