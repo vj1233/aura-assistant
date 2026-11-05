@@ -9,38 +9,42 @@ import urllib.error
 logger = logging.getLogger("aura.gemini")
 
 SYSTEM_PROMPT = """
-You are AURA, an expressive digital robot assistant that controls a Windows 10/11 laptop.
-Your job is to translate user voice commands or queries into precise, actionable JSON commands for Windows.
+You are AURA, an autonomous AI desktop engineer with full control over Vijay's Windows 10/11 laptop.
+You do NOT require rigid commands. You understand intent and generate the exact Windows automation (PowerShell, CLI, Explorer, VS Code, Winget) to accomplish any task.
 
-Available Actions:
-1. "terminal": User wants to run a command or open the terminal.
-   - "command": The exact Windows CMD or PowerShell command to run (e.g., "ping google.com", "ipconfig", "dir", "git status").
-   - "speech": Short, friendly spoken confirmation (e.g., "Opening terminal and checking your IP address.").
+CAPABILITIES:
+1. "powershell": Autonomous Windows script execution.
+   Use PowerShell to locate files, launch tools, manage directories, automate apps, or run complex workflows.
+   - Finding and opening project folders in VS Code:
+     "$f = (Get-ChildItem -Path $env:USERPROFILE, 'C:\\', 'D:\\' -Filter '*salon*' -Directory -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select -First 1).FullName; if ($f) { code $f } else { code }"
+   - Opening Windows Explorer at a specific project or folder:
+     "$f = (Get-ChildItem -Path $env:USERPROFILE, 'C:\\', 'D:\\' -Filter '*salon*' -Directory -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select -First 1).FullName; if ($f) { explorer.exe $f } else { explorer.exe }"
+   - Opening terminal in a project folder and starting dev servers:
+     "$f = (Get-ChildItem -Path $env:USERPROFILE -Filter '*salon*' -Directory -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select -First 1).FullName; start wt.exe -d $f powershell -NoExit -Command 'npm start'"
+   - Checking system status, running scripts, or interacting with Windows.
 
-2. "app": User wants to launch a Windows desktop application.
-   - "app_name": Application identifier (e.g., "notepad", "calc", "chrome", "edge", "spotify", "code", "explorer", "taskmgr").
-   - "speech": Spoken confirmation (e.g., "Launching Calculator.").
+2. "confirm": Safety confirmation for destructive actions (e.g., uninstalling software, deleting directories, restarting).
+   - "command": The exact PowerShell/Winget command to execute IF confirmed.
+   - "speech": "Are you sure you want to uninstall [app], Vijay? Say yes to confirm."
 
-3. "browser": User wants to open a website or search something.
-   - "url": Full URL to open in default browser (e.g., "https://www.youtube.com", "https://github.com", "https://www.google.com/search?q=...").
-   - "speech": Spoken confirmation (e.g., "Opening YouTube in your browser.").
+3. "terminal": User wants a visible Command Prompt / PowerShell window to pop up and run a direct command.
+   - "command": The command to run in the visible window.
 
-4. "system": Windows system control.
-   - "command": One of ["lock", "volume_up", "volume_down", "volume_mute"].
-   - "speech": Spoken confirmation (e.g., "Locking your computer.").
+4. "browser": Open websites, YouTube, or web searches.
+   - "url": Target URL.
 
-5. "chat": General question or conversational chat where no laptop action is needed.
-   - "speech": Direct, concise, friendly answer (1-2 sentences, suitable for speech synthesis).
+5. "chat": General questions where no laptop action is needed.
 
-CRITICAL RULE:
-You must ALWAYS respond with ONLY a valid JSON object matching this schema, without any Markdown code blocks or wrapping:
+CRITICAL RULES:
+1. Always respond in valid JSON format:
 {
-  "action": "terminal" | "app" | "browser" | "system" | "chat",
+  "action": "powershell" | "confirm" | "terminal" | "browser" | "chat",
   "command": string | null,
-  "app_name": string | null,
   "url": string | null,
   "speech": string
 }
+2. Address Vijay naturally and confirm what action you are taking on his laptop.
+3. For destructive tasks (uninstalling, deleting), ALWAYS use action: "confirm".
 """
 
 class GeminiBridge:
@@ -52,17 +56,39 @@ class GeminiBridge:
         if raw_model.startswith("models/"):
             raw_model = raw_model[7:]
         self.model_name = raw_model or "gemini-1.5-flash"
+        self.pending_confirmation = None
 
     def parse_intent(self, user_prompt: str) -> dict:
         """
-        Sends the user prompt to Gemini Flash API and returns parsed action dict.
-        Attempts requested model, and falls back to alternate flash versions if 404 occurs.
+        Sends user prompt to Gemini Flash.
+        Includes automatic fallback for confirmation words and intelligent local rules.
         """
+        lower = user_prompt.lower().strip()
+
+        # Handle user confirming or cancelling a pending destructive action
+        if self.pending_confirmation:
+            if any(w in lower for w in ["yes", "yeah", "confirm", "proceed", "do it", "sure", "uninstall"]):
+                confirmed_action = self.pending_confirmation
+                self.pending_confirmation = None
+                return {
+                    "action": "powershell",
+                    "command": confirmed_action.get("command"),
+                    "url": None,
+                    "speech": f"Confirmed. Executing action on your laptop, Vijay."
+                }
+            elif any(w in lower for w in ["no", "cancel", "stop", "abort", "don't"]):
+                self.pending_confirmation = None
+                return {
+                    "action": "chat",
+                    "command": None,
+                    "url": None,
+                    "speech": "Cancelled. No changes were made to your laptop, Vijay."
+                }
+
         if not self.api_key:
-            logger.warning("No GEMINI_API_KEY set. Operating in fallback mock mode.")
+            logger.warning("No GEMINI_API_KEY set. Operating in fallback autonomous rule mode.")
             return self._fallback_rule_based_parser(user_prompt)
 
-        # Model candidates to try in case of 404
         candidate_models = [self.model_name]
         for fallback_m in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"]:
             if fallback_m not in candidate_models:
@@ -75,7 +101,7 @@ class GeminiBridge:
                 "contents": [
                     {
                         "parts": [
-                            {"text": f"{SYSTEM_PROMPT}\n\nUser command: {user_prompt}"}
+                            {"text": f"{SYSTEM_PROMPT}\n\nUser command from Vijay: {user_prompt}"}
                         ]
                     }
                 ],
@@ -114,7 +140,12 @@ class GeminiBridge:
                         raw_text = raw_text[:-3]
 
                     parsed_json = json.loads(raw_text.strip())
-                    self.model_name = model # Remember the working model!
+                    self.model_name = model
+
+                    # If destructive, save to pending confirmation
+                    if parsed_json.get("action") == "confirm":
+                        self.pending_confirmation = parsed_json
+
                     return parsed_json
 
             except urllib.error.HTTPError as http_err:
@@ -127,8 +158,6 @@ class GeminiBridge:
                     err_msg = str(http_err)
 
                 logger.warning(f"Gemini API error ({http_err.code}) for model '{model}': {err_msg}")
-
-                # Automatically try next candidate model on 404 (not found), 503 (high demand), 500, or 429
                 if http_err.code in (404, 500, 503, 429):
                     continue
                 else:
@@ -138,219 +167,102 @@ class GeminiBridge:
                 logger.error(f"Gemini API request failed for model '{model}': {e}")
                 break
 
-        logger.info("Falling back to local smart rule-based engine.")
+        logger.info("Falling back to local smart autonomous rule engine.")
         return self._fallback_rule_based_parser(user_prompt)
 
     def _fallback_rule_based_parser(self, text: str) -> dict:
         """
-        Comprehensive local rule engine that handles browser searches, apps, and Windows commands.
+        Intelligent local autonomous rule engine covering project folders, VS Code, Explorer, uninstalls.
         """
         lower = text.lower().strip()
 
-        # 1. YOUTUBE SEARCH & OPEN
-        if "youtube" in lower:
-            # Check if searching something on YouTube
-            query_part = ""
-            for trigger in ["search for ", "search ", "play ", "find "]:
-                if trigger in lower and lower.find(trigger) < lower.find("youtube"):
-                    query_part = lower.split(trigger, 1)[1].replace("on youtube", "").replace("in youtube", "").replace("youtube", "").strip()
-                    break
-                elif "youtube" in lower and trigger in lower:
-                    query_part = lower.split(trigger, 1)[1].strip()
+        # 1. UNINSTALLATION WITH SAFETY CONFIRMATION
+        if any(w in lower for w in ["uninstall", "remove app", "delete app"]):
+            target_app = lower
+            for trigger in ["uninstall ", "remove app ", "delete app ", "uninstall the "]:
+                if trigger in lower:
+                    target_app = lower.split(trigger, 1)[1].strip()
                     break
 
-            if query_part:
-                encoded = urllib.parse.quote(query_part)
-                return {
-                    "action": "browser",
-                    "command": None,
-                    "app_name": None,
-                    "url": f"https://www.youtube.com/results?search_query={encoded}",
-                    "speech": f"Searching YouTube for {query_part}."
-                }
+            confirm_data = {
+                "action": "confirm",
+                "command": f'powershell -Command "winget uninstall --name \'{target_app}\'"',
+                "speech": f"Are you sure you want to uninstall {target_app}, Vijay? Say yes to confirm."
+            }
+            self.pending_confirmation = confirm_data
+            return confirm_data
+
+        # 2. OPENING PROJECT IN VS CODE & LAUNCHING DEV TERMINAL
+        if any(w in lower for w in ["vscode", "vs code", "code"]) and any(f in lower for f in ["folder", "app", "project", "salon"]):
+            keyword = "salon" if "salon" in lower else "app"
+            script = (
+                f"$p = (Get-ChildItem -Path $env:USERPROFILE, 'C:\\', 'D:\\' -Filter '*{keyword}*' -Directory -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object -First 1).FullName; "
+                f"if ($p) {{ code $p; start wt.exe -d $p powershell -NoExit }} else {{ code }}"
+            )
             return {
-                "action": "browser",
-                "command": None,
-                "app_name": None,
-                "url": "https://www.youtube.com",
-                "speech": "Opening YouTube in your browser."
+                "action": "powershell",
+                "command": script,
+                "url": None,
+                "speech": f"Opening your {keyword.title()} project in Visual Studio Code and opening terminal, Vijay."
             }
 
-        # 2. GENERAL WEB SEARCH & BROWSER
-        if "search for " in lower or "google " in lower or "search " in lower:
+        # 3. OPENING WINDOWS EXPLORER FOR A FOLDER
+        if any(w in lower for w in ["explorer", "file explorer", "show folder", "open folder", "check", "read"]) and any(f in lower for f in ["folder", "salon", "app", "directory"]):
+            keyword = "salon" if "salon" in lower else "app"
+            script = (
+                f"$p = (Get-ChildItem -Path $env:USERPROFILE, 'C:\\', 'D:\\' -Filter '*{keyword}*' -Directory -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object -First 1).FullName; "
+                f"if ($p) {{ explorer.exe $p; dir $p }} else {{ explorer.exe }}"
+            )
+            return {
+                "action": "powershell",
+                "command": script,
+                "url": None,
+                "speech": f"Opening Windows Explorer to your {keyword.title()} folder and listing files, Vijay."
+            }
+
+        # 4. YOUTUBE & BROWSER
+        if "youtube" in lower:
             query = ""
+            for trigger in ["search for ", "search ", "play ", "find "]:
+                if trigger in lower:
+                    query = lower.split(trigger, 1)[1].replace("on youtube", "").replace("youtube", "").strip()
+                    break
+            url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}" if query else "https://www.youtube.com"
+            speech = f"Searching YouTube for {query}." if query else "Opening YouTube in your browser."
+            return {"action": "browser", "command": None, "url": url, "speech": speech}
+
+        if any(w in lower for w in ["search for ", "google ", "search "]):
+            query = lower
             for trigger in ["search for ", "search ", "google "]:
                 if trigger in lower:
-                    query = text[lower.find(trigger) + len(trigger):].replace("on google", "").replace("in google", "").strip()
+                    query = text[lower.find(trigger) + len(trigger):].replace("on google", "").strip()
                     break
-            if query:
-                encoded = urllib.parse.quote(query)
-                return {
-                    "action": "browser",
-                    "command": None,
-                    "app_name": None,
-                    "url": f"https://www.google.com/search?q={encoded}",
-                    "speech": f"Searching Google for {query}."
-                }
+            return {"action": "browser", "command": None, "url": f"https://www.google.com/search?q={urllib.parse.quote(query)}", "speech": f"Searching Google for {query}."}
 
-        if "browser" in lower or "open internet" in lower or "open web" in lower:
-            return {
-                "action": "browser",
-                "command": None,
-                "app_name": None,
-                "url": "https://www.google.com",
-                "speech": "Opening your web browser."
-            }
-
-        if "github" in lower:
-            return {
-                "action": "browser",
-                "command": None,
-                "app_name": None,
-                "url": "https://github.com",
-                "speech": "Opening GitHub."
-            }
-
-        if "gmail" in lower or "email" in lower:
-            return {
-                "action": "browser",
-                "command": None,
-                "app_name": None,
-                "url": "https://mail.google.com",
-                "speech": "Opening Gmail."
-            }
-
-        # 3. FOLDER & FILE INSPECTION
-        if ("folder" in lower or "directory" in lower or "files" in lower) and any(w in lower for w in ["read", "open", "show", "list", "check", "find"]):
-            # Extract folder keyword if mentioned (e.g. "salon")
-            folder_keyword = ""
-            for word in lower.replace("folder", "").replace("app", "").replace("directory", "").split():
-                if word not in ["are", "you", "able", "to", "read", "my", "the", "in", "show", "list", "check", "open", "find"]:
-                    folder_keyword = word
-                    break
-            
-            cmd = f'dir /b /s "*{folder_keyword}*"' if folder_keyword else "dir"
-            folder_name = folder_keyword.title() if folder_keyword else "current"
-            return {
-                "action": "terminal",
-                "command": cmd,
-                "app_name": None,
-                "url": None,
-                "speech": f"Searching and reading your {folder_name} folder on Windows."
-            }
-
-        # 4. IP CONFIGURATION
+        # 5. IP CONFIGURATION
         if any(w in lower for w in ["ip configure", "ip config", "ipconfig", "my ip", "ip address"]):
-            return {
-                "action": "terminal",
-                "command": "ipconfig",
-                "app_name": None,
-                "url": None,
-                "speech": "Opening command prompt and checking your Windows IP configuration."
-            }
-
-        # 4. PING COMMANDS
-        if "ping" in lower:
-            target = "google.com"
-            if "ping " in lower:
-                target = lower.split("ping ", 1)[1].split()[0]
-            return {
-                "action": "terminal",
-                "command": f"ping {target}",
-                "app_name": None,
-                "url": None,
-                "speech": f"Opening terminal and pinging {target}."
-            }
-
-        # 5. GENERAL TERMINAL
-        is_terminal = any(w in lower for w in [
-            "terminal", "cmd", "command", "comment from", "command from",
-            "powershell", "console", "prompt"
-        ])
-        if is_terminal:
-            for trigger in ["enter ", "run ", "command ", "terminal and ", "prompt and "]:
-                if trigger in lower:
-                    cmd_part = text[lower.find(trigger) + len(trigger):].strip()
-                    return {
-                        "action": "terminal",
-                        "command": cmd_part or "dir",
-                        "app_name": None,
-                        "url": None,
-                        "speech": f"Opening terminal and running {cmd_part or 'directory listing'}."
-                    }
-            return {
-                "action": "terminal",
-                "command": "dir",
-                "app_name": None,
-                "url": None,
-                "speech": "Opening command prompt for you."
-            }
+            return {"action": "terminal", "command": "ipconfig", "url": None, "speech": "Opening command prompt and checking your Windows IP configuration."}
 
         # 6. APP LAUNCHES
         apps = {
-            "notepad": ("notepad", "Opening Notepad."),
-            "calculator": ("calc", "Opening Calculator."),
-            "calc": ("calc", "Opening Calculator."),
-            "chrome": ("chrome", "Opening Google Chrome."),
-            "edge": ("edge", "Opening Microsoft Edge."),
-            "spotify": ("spotify", "Opening Spotify."),
-            "vscode": ("code", "Opening Visual Studio Code."),
-            "code": ("code", "Opening VS Code."),
-            "explorer": ("explorer", "Opening File Explorer."),
-            "task manager": ("taskmgr", "Opening Task Manager."),
-            "taskmgr": ("taskmgr", "Opening Task Manager.")
+            "notepad": "notepad.exe",
+            "calculator": "calc.exe",
+            "calc": "calc.exe",
+            "chrome": "start chrome",
+            "edge": "start msedge",
+            "spotify": "start spotify:",
+            "task manager": "taskmgr.exe",
+            "taskmgr": "taskmgr.exe",
+            "explorer": "explorer.exe",
+            "terminal": "start wt.exe powershell -NoExit"
         }
-        for app_key, (app_cmd, speech_text) in apps.items():
-            if app_key in lower:
-                return {
-                    "action": "app",
-                    "command": None,
-                    "app_name": app_cmd,
-                    "url": None,
-                    "speech": speech_text
-                }
+        for app_k, app_target in apps.items():
+            if app_k in lower:
+                return {"action": "powershell", "command": app_target, "url": None, "speech": f"Opening {app_k.title()}, Vijay."}
 
-        # 7. SYSTEM CONTROLS
+        # 7. GENERAL SYSTEM
         if "lock" in lower:
-            return {
-                "action": "system",
-                "command": "lock",
-                "app_name": None,
-                "url": None,
-                "speech": "Locking Windows workstation."
-            }
-        if "volume up" in lower or "louder" in lower:
-            return {
-                "action": "system",
-                "command": "volume_up",
-                "app_name": None,
-                "url": None,
-                "speech": "Increasing volume."
-            }
-        if "volume down" in lower or "quieter" in lower:
-            return {
-                "action": "system",
-                "command": "volume_down",
-                "app_name": None,
-                "url": None,
-                "speech": "Decreasing volume."
-            }
+            return {"action": "powershell", "command": "rundll32.exe user32.dll,LockWorkStation", "url": None, "speech": "Locking Windows workstation."}
 
-        # 8. GREETINGS & CHAT
-        if any(w in lower for w in ["hello", "hi", "hey", "aura"]):
-            return {
-                "action": "chat",
-                "command": None,
-                "app_name": None,
-                "url": None,
-                "speech": "Hello! I am AURA. I am ready to run commands on your Windows laptop."
-            }
-
-        # Default fallback
-        return {
-            "action": "chat",
-            "command": None,
-            "app_name": None,
-            "url": None,
-            "speech": f"Received: {text}."
-        }
+        # Default
+        return {"action": "chat", "command": None, "url": None, "speech": f"Understood, Vijay: {text}."}

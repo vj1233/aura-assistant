@@ -29,8 +29,11 @@ class WindowsExecutor:
         logger.info(f"Executing action='{action}', command='{command}', app='{app_name}', url='{url}'")
 
         try:
-            if action == "terminal":
+            if action in ["powershell", "terminal"]:
                 success, speech, output_text = self.open_terminal_and_run(command or "dir", speech)
+            elif action == "confirm":
+                success = True
+                output_text = speech
             elif action == "app":
                 success = self.launch_app(app_name or "notepad")
                 output_text = f"Launched {app_name or 'Application'}."
