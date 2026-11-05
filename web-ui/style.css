@@ -1,17 +1,19 @@
 /* ==========================================================================
-   AURA RETRO AI ASSISTANT - PIXEL ART STYLESHEET
+   AURA RETRO AI ASSISTANT - CYBERPUNK ICE-BLUE PIXEL ART THEME
    Optimized for low-RAM mobile (Android 8.1+) and responsive desktop
    ========================================================================== */
 
 :root {
-  --bg-color: #0b0e14;
-  --frame-color: #1a1e28;
-  --screen-bg: #050d0a;
-  --phosphor-green: #00ff66;
-  --phosphor-cyan: #00e5ff;
+  --bg-color: #060911;
+  --frame-color: #0e1524;
+  --frame-border: #1b2842;
+  --screen-bg: #030a16;
+  --phosphor-blue: #00d4ff;
+  --phosphor-core: #7ae7ff;
+  --phosphor-cyan: #00f0ff;
   --phosphor-yellow: #ffcc00;
-  --phosphor-red: #ff3344;
-  --phosphor-dim: #005522;
+  --phosphor-red: #ff3355;
+  --phosphor-dim: #082d4d;
   --pixel-size: 8px;
   --font-retro: 'Press Start 2P', monospace, sans-serif;
   --font-mono: 'VT323', monospace;
@@ -23,6 +25,7 @@
   padding: 0;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -30,12 +33,12 @@ html, body {
   height: 100%;
   overflow: hidden;
   background-color: var(--bg-color);
-  color: var(--phosphor-green);
+  color: var(--phosphor-blue);
   font-family: var(--font-retro);
   font-size: 12px;
 }
 
-/* Outer Device Frame (like a GameBoy / Cyberdeck) */
+/* Outer Device Frame (Cyberdeck aesthetic) */
 .device-frame {
   display: flex;
   flex-direction: column;
@@ -44,8 +47,8 @@ html, body {
   height: 100%;
   margin: 0 auto;
   background-color: var(--frame-color);
-  border: 4px solid #2d3345;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.9), inset 0 0 10px rgba(0, 0, 0, 0.5);
+  border: 4px solid var(--frame-border);
+  box-shadow: 0 0 35px rgba(0, 162, 255, 0.2), inset 0 0 15px rgba(0, 0, 0, 0.8);
   position: relative;
 }
 
@@ -55,8 +58,8 @@ html, body {
   justify-content: space-between;
   align-items: center;
   padding: 10px 14px;
-  background-color: #12151d;
-  border-bottom: 2px solid #2d3345;
+  background-color: #090e18;
+  border-bottom: 2px solid var(--frame-border);
   font-size: 9px;
   letter-spacing: 1px;
 }
@@ -71,37 +74,37 @@ html, body {
   width: 8px;
   height: 8px;
   background-color: var(--phosphor-red);
-  box-shadow: 0 0 6px var(--phosphor-red);
+  box-shadow: 0 0 8px var(--phosphor-red);
   display: inline-block;
   image-rendering: pixelated;
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .pixel-dot.online {
-  background-color: var(--phosphor-green);
-  box-shadow: 0 0 6px var(--phosphor-green);
+  background-color: var(--phosphor-blue);
+  box-shadow: 0 0 8px var(--phosphor-blue);
 }
 
 .battery-readout {
-  color: var(--phosphor-cyan);
-  text-shadow: 0 0 5px rgba(0, 229, 255, 0.6);
+  color: var(--phosphor-core);
+  text-shadow: 0 0 8px rgba(0, 212, 255, 0.8);
 }
 
 /* CRT Screen */
 .crt-screen {
   flex: 1;
   margin: 12px;
-  background: radial-gradient(circle at center, #0a1f14 0%, #030805 100%);
-  border: 3px solid #1f2722;
+  background: radial-gradient(circle at center, #07192f 0%, #020710 100%);
+  border: 3px solid #142a45;
   border-radius: 8px;
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: 14px;
   overflow: hidden;
-  box-shadow: inset 0 0 25px rgba(0, 255, 102, 0.15), inset 0 0 10px rgba(0, 0, 0, 0.8);
+  box-shadow: inset 0 0 30px rgba(0, 180, 255, 0.2), inset 0 0 15px rgba(0, 0, 0, 0.9);
 }
 
 /* Scanline Effect */
@@ -112,8 +115,8 @@ html, body {
   right: 0;
   bottom: 0;
   background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%, 
-    rgba(0, 0, 0, 0.25) 50%
+    rgba(10, 15, 25, 0) 50%, 
+    rgba(0, 0, 0, 0.3) 50%
   );
   background-size: 100% 4px;
   pointer-events: none;
@@ -131,7 +134,7 @@ html, body {
   flex: 1;
   width: 100%;
   position: relative;
-  gap: 20px;
+  gap: 16px;
   cursor: pointer;
 }
 
@@ -141,24 +144,24 @@ html, body {
   justify-content: space-between;
   width: 240px;
   position: absolute;
-  top: 10px;
+  top: 6px;
 }
 
 .pixel-ear {
   width: 16px;
   height: 24px;
   background: var(--phosphor-dim);
-  border: 2px solid var(--phosphor-green);
-  box-shadow: 0 0 8px rgba(0, 255, 102, 0.4);
+  border: 2px solid var(--phosphor-blue);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
   transition: all 0.2s ease;
 }
 
 /* Eyes Grid */
 .eyes-container {
   display: flex;
-  gap: 50px;
+  gap: 48px;
   align-items: center;
-  margin-top: 25px;
+  margin-top: 20px;
 }
 
 .pixel-eye {
@@ -184,8 +187,8 @@ html, body {
 }
 
 .pixel-cell.active {
-  background-color: var(--phosphor-green);
-  box-shadow: 0 0 6px var(--phosphor-green);
+  background-color: var(--phosphor-blue);
+  box-shadow: 0 0 8px var(--phosphor-blue), 0 0 2px #fff;
 }
 
 /* Cheeks / Blush */
@@ -205,8 +208,8 @@ html, body {
 }
 
 .pixel-blush.active {
-  background-color: var(--phosphor-cyan);
-  box-shadow: 0 0 10px var(--phosphor-cyan);
+  background-color: #ff66cc;
+  box-shadow: 0 0 10px #ff66cc;
 }
 
 /* Mouth Container */
@@ -214,100 +217,115 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 30px;
-  margin-top: 5px;
+  height: 26px;
+  margin-top: 4px;
 }
 
 .pixel-mouth {
   width: 60px;
   height: 8px;
-  background-color: var(--phosphor-green);
-  box-shadow: 0 0 8px var(--phosphor-green);
+  background-color: var(--phosphor-blue);
+  box-shadow: 0 0 10px var(--phosphor-blue);
   transition: all 0.15s ease;
 }
 
 /* ==========================================================================
-   TERMINAL LOG / SUBTITLES
+   TERMINAL LOG / RESPONSE SCREEN
    ========================================================================== */
 .terminal-log {
   width: 100%;
-  background: rgba(0, 20, 10, 0.7);
-  border: 1px solid var(--phosphor-dim);
-  padding: 10px;
-  border-radius: 4px;
+  background: rgba(4, 15, 30, 0.85);
+  border: 2px solid var(--phosphor-dim);
+  padding: 10px 12px;
+  border-radius: 6px;
   z-index: 5;
+  box-shadow: inset 0 0 10px rgba(0, 212, 255, 0.15);
+  max-height: 130px;
+  overflow-y: auto;
 }
 
 .log-title {
   font-size: 8px;
-  color: var(--phosphor-cyan);
+  color: var(--phosphor-core);
   margin-bottom: 6px;
   letter-spacing: 1px;
 }
 
 .log-subtext {
   font-family: var(--font-mono);
-  font-size: 18px;
-  line-height: 1.2;
-  color: #c0ffd0;
-  min-height: 22px;
+  font-size: 19px;
+  line-height: 1.25;
+  color: #e0f6ff;
+  min-height: 24px;
   word-break: break-word;
 }
 
+.log-details {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--phosphor-cyan);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--phosphor-dim);
+  white-space: pre-wrap;
+  max-height: 70px;
+  overflow-y: auto;
+}
+
 /* ==========================================================================
-   CONTROLS & BUTTONS
+   CONTROLS & ACTION DECK
    ========================================================================== */
 .action-deck {
-  padding: 14px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background-color: #12151d;
-  border-top: 2px solid #2d3345;
+  background-color: #090e18;
+  border-top: 2px solid var(--frame-border);
 }
 
 .retro-btn {
-  background-color: #212838;
-  color: var(--phosphor-green);
+  background-color: #121c2e;
+  color: var(--phosphor-blue);
   font-family: var(--font-retro);
   font-size: 11px;
-  border: 3px solid #37425b;
-  border-bottom: 5px solid #161a25;
+  border: 3px solid #1f3455;
+  border-bottom: 5px solid #090e18;
   padding: 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  text-shadow: 0 0 5px rgba(0, 255, 102, 0.4);
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.6);
   transition: all 0.1s ease;
   outline: none;
 }
 
 .retro-btn:active {
   transform: translateY(2px);
-  border-bottom: 3px solid #161a25;
+  border-bottom: 3px solid #090e18;
 }
 
 .mic-btn {
-  background-color: #153825;
-  border-color: #22593b;
-  border-bottom-color: #0b2115;
+  background-color: #0b2d47;
+  border-color: #155585;
+  border-bottom-color: #061828;
   font-size: 12px;
-  padding: 16px;
+  padding: 15px;
 }
 
 .mic-btn.listening {
-  background-color: #401018;
+  background-color: #4a101d;
   border-color: var(--phosphor-red);
   color: var(--phosphor-red);
-  box-shadow: 0 0 15px rgba(255, 51, 68, 0.6);
+  box-shadow: 0 0 20px rgba(255, 51, 85, 0.7);
   animation: pulse-red 1s infinite alternate;
 }
 
 @keyframes pulse-red {
-  from { box-shadow: 0 0 5px rgba(255, 51, 68, 0.4); }
-  to { box-shadow: 0 0 20px rgba(255, 51, 68, 0.9); }
+  from { box-shadow: 0 0 5px rgba(255, 51, 85, 0.4); }
+  to { box-shadow: 0 0 22px rgba(255, 51, 85, 0.95); }
 }
 
 .deck-row {
@@ -330,7 +348,7 @@ html, body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(3, 7, 15, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -343,31 +361,31 @@ html, body {
 }
 
 .modal-content {
-  background: #181d28;
-  border: 3px solid var(--phosphor-green);
+  background: #0f192b;
+  border: 3px solid var(--phosphor-blue);
   padding: 20px;
   width: 100%;
   max-width: 400px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 0 25px rgba(0, 255, 102, 0.3);
+  box-shadow: 0 0 25px rgba(0, 212, 255, 0.35);
 }
 
 .modal-title {
   font-size: 11px;
-  color: var(--phosphor-green);
+  color: var(--phosphor-blue);
   margin-bottom: 5px;
 }
 
 .field-label {
   font-size: 9px;
-  color: var(--phosphor-cyan);
+  color: var(--phosphor-core);
 }
 
 .retro-input {
-  background: #090c12;
-  border: 2px solid #2d384e;
+  background: #060a12;
+  border: 2px solid #1a2a44;
   color: #fff;
   font-family: var(--font-mono);
   font-size: 18px;
@@ -376,7 +394,7 @@ html, body {
 }
 
 .retro-input:focus {
-  border-color: var(--phosphor-green);
+  border-color: var(--phosphor-blue);
 }
 
 .field-checkbox-label {

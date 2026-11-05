@@ -86,6 +86,7 @@ class AuraRobot {
     this.blushRight = document.getElementById('blush-right');
     this.logTitle = document.querySelector('.log-title');
     this.logText = document.getElementById('log-text');
+    this.logDetails = document.getElementById('log-details');
     this.micBtn = document.getElementById('mic-btn');
     this.micLabel = document.getElementById('mic-label');
     this.connectionDot = document.getElementById('connection-dot');
@@ -203,6 +204,7 @@ class AuraRobot {
         this.earLeft.style.height = '36px';
         this.earRight.style.height = '36px';
         this.mouth.style.height = '14px';
+        if (this.logDetails) this.logDetails.style.display = 'none';
         break;
 
       case 'thinking':
@@ -420,7 +422,14 @@ class AuraRobot {
       const data = await response.json();
       
       const speechMsg = data.speech || 'Command executed on laptop.';
-      this.setState('speaking', 'ACTION EXECUTED', `${data.action.toUpperCase()}: ${data.command || speechMsg}`);
+      this.setState('speaking', data.action.toUpperCase(), speechMsg);
+
+      if (data.output && this.logDetails) {
+        this.logDetails.textContent = data.output;
+        this.logDetails.style.display = 'block';
+      } else if (this.logDetails) {
+        this.logDetails.style.display = 'none';
+      }
       
       this.speak(speechMsg, () => {
         this.setState('happy', 'COMPLETE', speechMsg);
