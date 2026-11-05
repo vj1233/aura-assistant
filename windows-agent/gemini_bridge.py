@@ -2,6 +2,7 @@ import os
 import re
 import json
 import logging
+import urllib.parse
 import urllib.request
 import urllib.error
 
@@ -17,12 +18,12 @@ Available Actions:
    - "speech": Short, friendly spoken confirmation (e.g., "Opening terminal and checking your IP address.").
 
 2. "app": User wants to launch a Windows desktop application.
-   - "app_name": Application identifier (e.g., "notepad", "calc", "chrome", "edge", "spotify", "code", "explorer").
+   - "app_name": Application identifier (e.g., "notepad", "calc", "chrome", "edge", "spotify", "code", "explorer", "taskmgr").
    - "speech": Spoken confirmation (e.g., "Launching Calculator.").
 
 3. "browser": User wants to open a website or search something.
    - "url": Full URL to open in default browser (e.g., "https://www.youtube.com", "https://github.com", "https://www.google.com/search?q=...").
-   - "speech": Spoken confirmation (e.g., "Opening YouTube.").
+   - "speech": Spoken confirmation (e.g., "Opening YouTube in your browser.").
 
 4. "system": Windows system control.
    - "command": One of ["lock", "volume_up", "volume_down", "volume_mute"].
@@ -127,7 +128,6 @@ class GeminiBridge:
 
                 logger.warning(f"Gemini API error ({http_err.code}) for model '{model}': {err_msg}")
 
-                # If 404, loop will try next model candidate
                 if http_err.code == 404:
                     continue
                 else:
@@ -142,18 +142,84 @@ class GeminiBridge:
 
     def _fallback_rule_based_parser(self, text: str) -> dict:
         """
-        Smart local rule engine that handles speech misrecognitions (e.g. 'comment from' for 'command prompt').
+        Comprehensive local rule engine that handles browser searches, apps, and Windows commands.
         """
         lower = text.lower().strip()
 
-        # Phonetic / Speech correction for Windows commands
-        # "comment from", "command from", "cmd" -> command prompt / terminal
-        is_terminal = any(w in lower for w in [
-            "terminal", "cmd", "command", "comment from", "command from",
-            "powershell", "console", "prompt"
-        ])
+        # 1. YOUTUBE SEARCH & OPEN
+        if "youtube" in lower:
+            # Check if searching something on YouTube
+            query_part = ""
+            for trigger in ["search for ", "search ", "play ", "find "]:
+                if trigger in lower and lower.find(trigger) < lower.find("youtube"):
+                    query_part = lower.split(trigger, 1)[1].replace("on youtube", "").replace("in youtube", "").replace("youtube", "").strip()
+                    break
+                elif "youtube" in lower and trigger in lower:
+                    query_part = lower.split(trigger, 1)[1].strip()
+                    break
 
-        # IP config recognition ("ip configure", "ipconfig", "my ip", "ip address")
+            if query_part:
+                encoded = urllib.parse.quote(query_part)
+                return {
+                    "action": "browser",
+                    "command": None,
+                    "app_name": None,
+                    "url": f"https://www.youtube.com/results?search_query={encoded}",
+                    "speech": f"Searching YouTube for {query_part}."
+                }
+            return {
+                "action": "browser",
+                "command": None,
+                "app_name": None,
+                "url": "https://www.youtube.com",
+                "speech": "Opening YouTube in your browser."
+            }
+
+        # 2. GENERAL WEB SEARCH & BROWSER
+        if "search for " in lower or "google " in lower or "search " in lower:
+            query = ""
+            for trigger in ["search for ", "search ", "google "]:
+                if trigger in lower:
+                    query = text[lower.find(trigger) + len(trigger):].replace("on google", "").replace("in google", "").strip()
+                    break
+            if query:
+                encoded = urllib.parse.quote(query)
+                return {
+                    "action": "browser",
+                    "command": None,
+                    "app_name": None,
+                    "url": f"https://www.google.com/search?q={encoded}",
+                    "speech": f"Searching Google for {query}."
+                }
+
+        if "browser" in lower or "open internet" in lower or "open web" in lower:
+            return {
+                "action": "browser",
+                "command": None,
+                "app_name": None,
+                "url": "https://www.google.com",
+                "speech": "Opening your web browser."
+            }
+
+        if "github" in lower:
+            return {
+                "action": "browser",
+                "command": None,
+                "app_name": None,
+                "url": "https://github.com",
+                "speech": "Opening GitHub."
+            }
+
+        if "gmail" in lower or "email" in lower:
+            return {
+                "action": "browser",
+                "command": None,
+                "app_name": None,
+                "url": "https://mail.google.com",
+                "speech": "Opening Gmail."
+            }
+
+        # 3. IP CONFIGURATION
         if any(w in lower for w in ["ip configure", "ip config", "ipconfig", "my ip", "ip address"]):
             return {
                 "action": "terminal",
@@ -163,7 +229,7 @@ class GeminiBridge:
                 "speech": "Opening command prompt and checking your Windows IP configuration."
             }
 
-        # Ping commands
+        # 4. PING COMMANDS
         if "ping" in lower:
             target = "google.com"
             if "ping " in lower:
@@ -176,7 +242,11 @@ class GeminiBridge:
                 "speech": f"Opening terminal and pinging {target}."
             }
 
-        # General terminal trigger
+        # 5. GENERAL TERMINAL
+        is_terminal = any(w in lower for w in [
+            "terminal", "cmd", "command", "comment from", "command from",
+            "powershell", "console", "prompt"
+        ])
         if is_terminal:
             for trigger in ["enter ", "run ", "command ", "terminal and ", "prompt and "]:
                 if trigger in lower:
@@ -196,16 +266,19 @@ class GeminiBridge:
                 "speech": "Opening command prompt for you."
             }
 
-        # App launches
+        # 6. APP LAUNCHES
         apps = {
             "notepad": ("notepad", "Opening Notepad."),
             "calculator": ("calc", "Opening Calculator."),
+            "calc": ("calc", "Opening Calculator."),
             "chrome": ("chrome", "Opening Google Chrome."),
             "edge": ("edge", "Opening Microsoft Edge."),
             "spotify": ("spotify", "Opening Spotify."),
             "vscode": ("code", "Opening Visual Studio Code."),
             "code": ("code", "Opening VS Code."),
-            "explorer": ("explorer", "Opening File Explorer.")
+            "explorer": ("explorer", "Opening File Explorer."),
+            "task manager": ("taskmgr", "Opening Task Manager."),
+            "taskmgr": ("taskmgr", "Opening Task Manager.")
         }
         for app_key, (app_cmd, speech_text) in apps.items():
             if app_key in lower:
@@ -217,14 +290,14 @@ class GeminiBridge:
                     "speech": speech_text
                 }
 
-        # System controls
+        # 7. SYSTEM CONTROLS
         if "lock" in lower:
             return {
                 "action": "system",
                 "command": "lock",
                 "app_name": None,
                 "url": None,
-                "speech": "Locking Windows."
+                "speech": "Locking Windows workstation."
             }
         if "volume up" in lower or "louder" in lower:
             return {
@@ -243,7 +316,7 @@ class GeminiBridge:
                 "speech": "Decreasing volume."
             }
 
-        # Friendly greeting / chat
+        # 8. GREETINGS & CHAT
         if any(w in lower for w in ["hello", "hi", "hey", "aura"]):
             return {
                 "action": "chat",
@@ -253,7 +326,7 @@ class GeminiBridge:
                 "speech": "Hello! I am AURA. I am ready to run commands on your Windows laptop."
             }
 
-        # Default chat
+        # Default fallback
         return {
             "action": "chat",
             "command": None,

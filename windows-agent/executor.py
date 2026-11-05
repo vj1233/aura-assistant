@@ -179,6 +179,12 @@ class WindowsExecutor:
         """Opens default system browser with target URL."""
         if not url.startswith("http://") and not url.startswith("https://"):
             url = f"https://{url}"
+        if self.is_windows:
+            try:
+                subprocess.Popen(f'start "" "{url}"', shell=True)
+                return True
+            except Exception as e:
+                logger.warning(f"Windows start browser error: {e}")
         webbrowser.open(url)
         return True
 
