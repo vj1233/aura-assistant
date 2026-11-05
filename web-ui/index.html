@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AURA // Retro AI Assistant</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d0f12">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+</head>
+<body class="theme-scanlines">
+  <div class="device-frame">
+    <!-- Header / Status Bar -->
+    <header class="status-bar">
+      <div class="status-indicator">
+        <span class="pixel-dot" id="connection-dot"></span>
+        <span id="connection-text">LINK: OFFLINE</span>
+      </div>
+      <div class="battery-readout">
+        <span id="model-badge">GEMINI FLASH</span>
+      </div>
+    </header>
+
+    <!-- CRT Monitor Screen -->
+    <main class="crt-screen" id="main-screen">
+      <div class="scanline-overlay"></div>
+      
+      <!-- Robot Face Canvas / Container -->
+      <div class="face-container" id="face-container">
+        <!-- Antennas / Ears -->
+        <div class="ears-container">
+          <div class="pixel-ear ear-left" id="ear-left"></div>
+          <div class="pixel-ear ear-right" id="ear-right"></div>
+        </div>
+
+        <!-- Robot Eyes Grid -->
+        <div class="eyes-container">
+          <div class="pixel-eye eye-left" id="eye-left">
+            <div class="pixel-matrix" id="left-eye-matrix"></div>
+          </div>
+          <div class="pixel-eye eye-right" id="eye-right">
+            <div class="pixel-matrix" id="right-eye-matrix"></div>
+          </div>
+        </div>
+
+        <!-- Robot Cheeks (blush when happy) -->
+        <div class="cheeks-container">
+          <div class="pixel-blush blush-left" id="blush-left"></div>
+          <div class="pixel-blush blush-right" id="blush-right"></div>
+        </div>
+
+        <!-- Robot Mouth -->
+        <div class="mouth-container">
+          <div class="pixel-mouth" id="mouth"></div>
+        </div>
+      </div>
+
+      <!-- Dialogue / Subtitles readout -->
+      <div class="terminal-log" id="terminal-log">
+        <div class="log-title">&gt; SYSTEM READY</div>
+        <div class="log-subtext" id="log-text">Tap anywhere or tap MIC to speak</div>
+      </div>
+    </main>
+
+    <!-- Controls / Action Deck -->
+    <footer class="action-deck">
+      <button class="retro-btn mic-btn" id="mic-btn" aria-label="Microphone">
+        <span class="btn-icon">🎙️</span>
+        <span class="btn-label" id="mic-label">TAP TO TALK</span>
+      </button>
+
+      <div class="deck-row">
+        <button class="retro-btn secondary-btn" id="test-btn">
+          TEST COMMAND
+        </button>
+        <button class="retro-btn secondary-btn" id="settings-btn">
+          SETTINGS
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal hidden" id="settings-modal">
+    <div class="modal-content">
+      <h2 class="modal-title">&gt; CONFIGURATION</h2>
+      
+      <label for="agent-url" class="field-label">LAPTOP AGENT URL:</label>
+      <input type="text" id="agent-url" class="retro-input" placeholder="http://192.168.1.100:5000">
+
+      <label for="voice-toggle" class="field-checkbox-label">
+        <input type="checkbox" id="voice-toggle" checked>
+        <span>ENABLE ROBOT VOICE (TTS)</span>
+      </label>
+
+      <div class="modal-actions">
+        <button class="retro-btn" id="save-settings-btn">SAVE</button>
+        <button class="retro-btn secondary-btn" id="close-settings-btn">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

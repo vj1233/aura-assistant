@@ -1,0 +1,16 @@
+{
+  "name": "AURA Assistant",
+  "short_name": "AURA",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0e14",
+  "theme_color": "#0d0f12",
+  "description": "Retro Pixel-Art AI Voice Assistant",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
