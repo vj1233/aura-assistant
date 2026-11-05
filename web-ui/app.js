@@ -110,6 +110,7 @@ class AuraRobot {
     // Speech Recognition
     this.recognition = null;
     this.isListening = false;
+    this.micPermissionGranted = false;
 
     this.init();
   }
@@ -118,7 +119,6 @@ class AuraRobot {
     this.initPixelEyes();
     this.renderEyes('idle');
     this.startBlinkLoop();
-    this.initSpeechRecognition();
     this.setupEventListeners();
     this.checkAgentConnection();
 
@@ -213,7 +213,6 @@ class AuraRobot {
         this.thinkingTimer = setInterval(() => {
           this.thinkingFrame = (this.thinkingFrame + 1) % 2;
           this.renderEyes(this.thinkingFrame === 0 ? 'thinking1' : 'thinking2');
-          // Alternating ears
           if (this.thinkingFrame === 0) {
             this.earLeft.style.height = '32px';
             this.earRight.style.height = '18px';
@@ -229,7 +228,6 @@ class AuraRobot {
         this.renderEyes('idle');
         this.micBtn.classList.remove('listening');
         this.micLabel.textContent = 'SPEAKING...';
-        // Pulse mouth to simulate speaking
         let mouthPulse = false;
         this.speechPulseTimer = setInterval(() => {
           mouthPulse = !mouthPulse;
@@ -253,7 +251,7 @@ class AuraRobot {
         this.renderEyes('error');
         this.mouth.style.height = '6px';
         this.mouth.style.width = '40px';
-        setTimeout(() => this.setState('idle'), 3500);
+        setTimeout(() => this.setState('idle'), 4000);
         break;
     }
   }
@@ -282,65 +280,129 @@ class AuraRobot {
     if (this.blinkTimer) clearTimeout(this.blinkTimer);
   }
 
-  // Speech Recognition Setup (Web Speech API)
-  initSpeechRecognition() {
+  // Explicitly prompt the browser for microphone access via getUserMedia
+  async ensureMicPermission() {
+    if (this.micPermissionGranted) return true;
+
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        this.setState('listening', 'CHECKING MIC', 'Please tap ALLOW if asked...');
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(t => t.stop());
+        this.micPermissionGranted = true;
+        return true;
+      }
+    } catch (err) {
+      console.warn('getUserMedia mic request failed:', err);
+      // Let speech recognition attempt anyway or show alert
+    }
+    return true;
+  }
+
+  // Dynamic Speech Recognition creation (resets zombie state on mobile)
+  createSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.warn('SpeechRecognition not supported in this browser.');
-      this.logTitle.textContent = '> VOICE NOT SUPPORTED';
-      this.logText.textContent = 'Browser missing Web Speech API. Use Test button.';
-      return;
+      return null;
     }
 
-    this.recognition = new SpeechRecognition();
-    this.recognition.continuous = false;
-    this.recognition.interimResults = false;
-    this.recognition.lang = 'en-US';
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = 'en-US';
 
-    this.recognition.onstart = () => {
+    rec.onstart = () => {
       this.isListening = true;
       this.setState('listening', 'LISTENING', 'Speak your command now...');
     };
 
-    this.recognition.onresult = (event) => {
+    rec.onresult = (event) => {
+      this.isListening = false;
       const transcript = event.results[0][0].transcript;
       this.setState('thinking', 'COMMAND RECEIVED', `"${transcript}"`);
       this.processCommand(transcript);
     };
 
-    this.recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
+    rec.onerror = (event) => {
       this.isListening = false;
-      this.setState('error', 'VOICE ERROR', `Recognition failed: ${event.error}`);
+      console.error('Speech recognition error:', event.error);
+      
+      let hint = event.error;
+      if (event.error === 'not-allowed') {
+        hint = 'Mic blocked. Allow mic in Chrome settings.';
+      } else if (event.error === 'network') {
+        hint = 'Network error contacting Google Speech.';
+      } else if (event.error === 'no-speech') {
+        hint = 'No speech heard. Tap again and speak closer.';
+      }
+
+      this.setState('error', 'VOICE ERROR', `${hint}`);
     };
 
-    this.recognition.onend = () => {
+    rec.onend = () => {
       this.isListening = false;
       if (this.state === 'listening') {
         this.setState('idle', 'IDLE', 'Tap to speak again');
       }
     };
+
+    return rec;
   }
 
-  toggleListening() {
-    if (!this.recognition) {
-      alert('Speech Recognition is not supported by your current browser.');
+  async toggleListening() {
+    // If currently listening, stop it
+    if (this.isListening && this.recognition) {
+      try {
+        this.recognition.stop();
+      } catch (e) {}
+      this.isListening = false;
+      this.setState('idle', 'IDLE', 'Stopped listening');
       return;
     }
 
-    if (this.isListening) {
-      this.recognition.stop();
-      this.isListening = false;
-    } else {
-      try {
-        this.recognition.start();
-      } catch (err) {
-        console.error('Recognition start error:', err);
+    // Check if Speech Recognition is supported
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      // Fallback: prompt for typed command immediately
+      this.promptManualCommand('Voice not supported on this browser. Type command:');
+      return;
+    }
+
+    // Ensure permission popup triggers
+    await this.ensureMicPermission();
+
+    // Recreate a clean instance to avoid dead state
+    try {
+      if (this.recognition) {
+        try { this.recognition.abort(); } catch (e) {}
       }
+
+      this.recognition = this.createSpeechRecognition();
+      if (!this.recognition) {
+        this.promptManualCommand();
+        return;
+      }
+
+      this.setState('listening', 'STARTING MIC', 'Initializing listener...');
+      this.recognition.start();
+
+    } catch (err) {
+      console.error('Recognition start error:', err);
+      this.isListening = false;
+      this.setState('error', 'START ERROR', `${err.message || 'Could not start mic'}`);
     }
   }
 
-  // Send speech text to Laptop Agent
+  // Quick fallback prompt to type command directly
+  promptManualCommand(customPrompt = 'Enter command for Windows laptop:') {
+    const cmd = prompt(customPrompt, 'open terminal and ping google.com');
+    if (cmd && cmd.trim()) {
+      this.setState('thinking', 'COMMAND', `"${cmd}"`);
+      this.processCommand(cmd.trim());
+    }
+  }
+
+  // Send command to Laptop Agent
   async processCommand(userText) {
     try {
       this.setState('thinking', 'QUERYING GEMINI...', `Consulting Gemini Flash...`);
@@ -357,7 +419,6 @@ class AuraRobot {
 
       const data = await response.json();
       
-      // Update with executed info
       const speechMsg = data.speech || 'Command executed on laptop.';
       this.setState('speaking', 'ACTION EXECUTED', `${data.action.toUpperCase()}: ${data.command || speechMsg}`);
       
@@ -378,20 +439,19 @@ class AuraRobot {
       return;
     }
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
-    utterance.pitch = 1.1; // Slightly robotic tone
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.05;
+      utterance.pitch = 1.1; // Slightly robotic tone
 
-    utterance.onend = () => {
+      utterance.onend = () => { if (onComplete) onComplete(); };
+      utterance.onerror = () => { if (onComplete) onComplete(); };
+
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
       if (onComplete) onComplete();
-    };
-
-    utterance.onerror = () => {
-      if (onComplete) onComplete();
-    };
-
-    window.speechSynthesis.speak(utterance);
+    }
   }
 
   // Heartbeat check to Windows Agent
@@ -412,17 +472,27 @@ class AuraRobot {
   }
 
   setupEventListeners() {
-    // Tap face or mic button to talk
-    this.micBtn.addEventListener('click', () => this.toggleListening());
-    this.faceContainer.addEventListener('click', () => this.toggleListening());
+    const handleTrigger = (e) => {
+      e.preventDefault();
+      this.toggleListening();
+    };
 
-    // Test button (simulate voice command without needing mic permission)
+    // Support both click and touchstart cleanly
+    this.micBtn.addEventListener('click', handleTrigger);
+    this.faceContainer.addEventListener('click', handleTrigger);
+
+    // Tap on terminal log to type a command manually (mobile friendly)
+    const logBox = document.getElementById('terminal-log');
+    if (logBox) {
+      logBox.style.cursor = 'pointer';
+      logBox.addEventListener('click', () => {
+        this.promptManualCommand();
+      });
+    }
+
+    // Test button
     this.testBtn.addEventListener('click', () => {
-      const sample = prompt('Enter test command for Windows laptop:', 'open terminal and check ip address');
-      if (sample) {
-        this.setState('thinking', 'TEST COMMAND', `"${sample}"`);
-        this.processCommand(sample);
-      }
+      this.promptManualCommand();
     });
 
     // Settings Modal
