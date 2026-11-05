@@ -1,6 +1,6 @@
 /**
  * AURA // Retro AI Assistant - Smart Conversational Engine for Vijay
- * Desk-Mode 24/7 Hands-Free Controller for Android 8.1+ & Desktop
+ * Bulletproof 24/7 Desk-Mode Controller with Live Real-Time Transcripts
  */
 
 // 6x6 Matrix Patterns for Expressive Pixel Eyes
@@ -181,7 +181,7 @@ class AuraRobot {
         this.renderEyes('idle');
         this.micBtn.classList.remove('listening');
         if (this.deskModeActive) {
-          this.micLabel.textContent = '🟢 DESK MODE: LISTENING';
+          this.micLabel.textContent = '🟢 DESK MODE: ACTIVE';
         } else {
           this.micLabel.textContent = 'TAP TO START DESK MODE';
         }
@@ -339,15 +339,17 @@ class AuraRobot {
     this.setState('idle', 'DESK MODE ACTIVE', 'Say "Aura" or any command...');
     this.micLabel.textContent = '🟢 DESK MODE: ACTIVE';
     
-    this.speak("Aura desk mode activated. I am listening.", () => {
-      this.restartListener();
-    });
+    // START LISTENER IMMEDIATELY from this user gesture!
+    this.restartListener();
+
+    // Play welcome audio
+    this.speak("Aura desk mode activated. I am listening.");
   }
 
   // Safe Continuous Listener Loop
   restartListener() {
     if (!this.deskModeActive) return;
-    if (this.isSpeaking || this.isProcessing) return;
+    if (this.isProcessing) return; // Do not interrupt if sending command to Gemini
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -367,30 +369,55 @@ class AuraRobot {
 
       this.recognition = new SpeechRecognition();
       this.recognition.continuous = false;
-      this.recognition.interimResults = false;
+      this.recognition.interimResults = true; // Show live transcription in real time!
       this.recognition.lang = localStorage.getItem('aura_lang') || 'en-IN';
 
       this.recognition.onstart = () => {
         this.isListeningActive = true;
+        this.logTitle.textContent = '> 🎙️ LISTENING NOW';
+        this.micBtn.classList.add('listening');
       };
 
       this.recognition.onresult = (event) => {
-        this.isListeningActive = false;
-        const transcript = event.results[0][0].transcript.trim();
-        this.handleHeardSpeech(transcript);
+        let interimText = '';
+        let finalText = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalText += event.results[i][0].transcript;
+          } else {
+            interimText += event.results[i][0].transcript;
+          }
+        }
+
+        // Live visual transcript: show what the phone is hearing while speaking!
+        if (interimText) {
+          this.logTitle.textContent = '> 🎤 HEARING YOU...';
+          this.logText.textContent = `"${interimText}"`;
+        }
+
+        if (finalText) {
+          this.isListeningActive = false;
+          this.handleHeardSpeech(finalText);
+        }
       };
 
       this.recognition.onerror = (event) => {
         this.isListeningActive = false;
-        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        if (event.error === 'not-allowed') {
+          this.logTitle.textContent = '> ⚠️ MIC BLOCKED';
+          this.logText.textContent = 'Tap to allow mic in Chrome';
+          this.micLabel.textContent = 'TAP TO ALLOW MIC';
+        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
           console.warn('Speech recognition error:', event.error);
         }
       };
 
       this.recognition.onend = () => {
         this.isListeningActive = false;
-        if (this.deskModeActive && !this.isSpeaking && !this.isProcessing) {
-          setTimeout(() => this.restartListener(), 250);
+        // Keep listening in desk mode as long as we're not busy
+        if (this.deskModeActive && !this.isProcessing) {
+          setTimeout(() => this.restartListener(), 200);
         }
       };
 
@@ -398,7 +425,7 @@ class AuraRobot {
 
     } catch (err) {
       console.warn('Listener start exception:', err);
-      setTimeout(() => this.restartListener(), 1000);
+      setTimeout(() => this.restartListener(), 800);
     }
   }
 
@@ -413,18 +440,12 @@ class AuraRobot {
     const lower = text.toLowerCase();
 
     // 1. LIVE VISUAL FEEDBACK: Show the exact words on screen immediately!
-    this.logTitle.textContent = '> HEARD YOU SAY';
+    this.logTitle.textContent = '> HEARD:';
     this.logText.textContent = `"${text}"`;
 
     // Check for Wake Word variations
     const wakePattern = /(?:hey\s+)?(?:aura|awra|awruh|aw-ruh|ora|ara|aara|aur|aurora|order|auto)/i;
     const hasWakeWord = wakePattern.test(lower);
-
-    // Check for direct actionable command keywords
-    const isDirectCommand = [
-      "ip", "terminal", "notepad", "calculator", "calc", "open", 
-      "ping", "dir", "lock", "volume", "status", "whoami", "cmd", "powershell"
-    ].some(kw => lower.includes(kw));
 
     // CASE 1: Currently waiting for command after greeting
     if (this.state === 'waiting_command') {
@@ -460,8 +481,9 @@ class AuraRobot {
       return;
     }
 
-    // CASE 3: Direct command spoken without saying "Aura"
-    if (isDirectCommand) {
+    // CASE 3: Any command spoken directly (even without saying "Aura"!)
+    // If the user says "check my IP", "open terminal", "ipconfig", "open notepad", etc.
+    if (lower.length > 2) {
       if (lower.includes('settings')) {
         this.openSettings();
       } else {
@@ -472,7 +494,7 @@ class AuraRobot {
     }
 
     // Otherwise, resume listening loop
-    setTimeout(() => this.restartListener(), 400);
+    setTimeout(() => this.restartListener(), 250);
   }
 
   // Send command to Laptop Agent
@@ -522,7 +544,7 @@ class AuraRobot {
     }
   }
 
-  // Audio Speaker Output (Hardware MP3 Stream + Native Fallback)
+  // Audio Speaker Output with Watchdog (Cannot freeze listener)
   speak(text, onComplete = null) {
     if (!this.ttsEnabled) {
       if (onComplete) onComplete();
@@ -532,10 +554,21 @@ class AuraRobot {
     this.isSpeaking = true;
     this.unlockAudioContext();
 
+    let completed = false;
     const finish = () => {
+      if (completed) return;
+      completed = true;
       this.isSpeaking = false;
       if (onComplete) onComplete();
     };
+
+    // 5-second watchdog: guaranteed recovery if mobile audio hangs
+    setTimeout(() => {
+      if (!completed) {
+        console.warn('Speech watchdog forced finish');
+        finish();
+      }
+    }, 5000);
 
     // Method 1: Hardware-direct MP3 Stream
     try {
