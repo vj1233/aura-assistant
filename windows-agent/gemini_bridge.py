@@ -128,7 +128,8 @@ class GeminiBridge:
 
                 logger.warning(f"Gemini API error ({http_err.code}) for model '{model}': {err_msg}")
 
-                if http_err.code == 404:
+                # Automatically try next candidate model on 404 (not found), 503 (high demand), 500, or 429
+                if http_err.code in (404, 500, 503, 429):
                     continue
                 else:
                     break
@@ -219,7 +220,26 @@ class GeminiBridge:
                 "speech": "Opening Gmail."
             }
 
-        # 3. IP CONFIGURATION
+        # 3. FOLDER & FILE INSPECTION
+        if ("folder" in lower or "directory" in lower or "files" in lower) and any(w in lower for w in ["read", "open", "show", "list", "check", "find"]):
+            # Extract folder keyword if mentioned (e.g. "salon")
+            folder_keyword = ""
+            for word in lower.replace("folder", "").replace("app", "").replace("directory", "").split():
+                if word not in ["are", "you", "able", "to", "read", "my", "the", "in", "show", "list", "check", "open", "find"]:
+                    folder_keyword = word
+                    break
+            
+            cmd = f'dir /b /s "*{folder_keyword}*"' if folder_keyword else "dir"
+            folder_name = folder_keyword.title() if folder_keyword else "current"
+            return {
+                "action": "terminal",
+                "command": cmd,
+                "app_name": None,
+                "url": None,
+                "speech": f"Searching and reading your {folder_name} folder on Windows."
+            }
+
+        # 4. IP CONFIGURATION
         if any(w in lower for w in ["ip configure", "ip config", "ipconfig", "my ip", "ip address"]):
             return {
                 "action": "terminal",
