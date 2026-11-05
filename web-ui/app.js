@@ -106,6 +106,8 @@ class AuraRobot {
     // Speech Recognition
     this.recognition = null;
     this.isListeningActive = false;
+    this.speechBuffer = '';
+    this.speechDebounceTimer = null;
 
     this.init();
   }
@@ -380,26 +382,37 @@ class AuraRobot {
 
       this.recognition.onresult = (event) => {
         let interimText = '';
-        let finalText = '';
+        let newFinalText = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
-            finalText += event.results[i][0].transcript;
+            newFinalText += ' ' + event.results[i][0].transcript;
           } else {
-            interimText += event.results[i][0].transcript;
+            interimText += ' ' + event.results[i][0].transcript;
           }
         }
 
-        // Live visual transcript: show what the phone is hearing while speaking!
-        if (interimText) {
-          this.logTitle.textContent = '> 🎤 HEARING YOU...';
-          this.logText.textContent = `"${interimText}"`;
+        if (newFinalText.trim()) {
+          this.speechBuffer = (this.speechBuffer + ' ' + newFinalText).trim();
         }
 
-        if (finalText) {
-          this.isListeningActive = false;
-          this.handleHeardSpeech(finalText);
+        // Live visual transcript: show accumulated words plus current spoken word
+        const liveTranscript = (this.speechBuffer + ' ' + interimText).trim();
+        if (liveTranscript) {
+          this.logTitle.textContent = '> 🎤 HEARING YOU...';
+          this.logText.textContent = `"${liveTranscript}"`;
         }
+
+        // Silence Debounce: Wait 1.3 seconds after speech pauses before executing
+        clearTimeout(this.speechDebounceTimer);
+        this.speechDebounceTimer = setTimeout(() => {
+          if (this.speechBuffer.trim()) {
+            const completePhrase = this.speechBuffer.trim();
+            this.speechBuffer = '';
+            this.isListeningActive = false;
+            this.handleHeardSpeech(completePhrase);
+          }
+        }, 1300);
       };
 
       this.recognition.onerror = (event) => {
@@ -417,7 +430,7 @@ class AuraRobot {
         this.isListeningActive = false;
         // Keep listening in desk mode as long as we're not busy
         if (this.deskModeActive && !this.isProcessing) {
-          setTimeout(() => this.restartListener(), 200);
+          setTimeout(() => this.restartListener(), 150);
         }
       };
 
