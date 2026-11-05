@@ -403,7 +403,7 @@ class AuraRobot {
           this.logText.textContent = `"${liveTranscript}"`;
         }
 
-        // Silence Debounce: Wait 1.3 seconds after speech pauses before executing
+        // Silence Debounce: Wait 650ms after speech pauses before executing (fast & responsive)
         clearTimeout(this.speechDebounceTimer);
         this.speechDebounceTimer = setTimeout(() => {
           if (this.speechBuffer.trim()) {
@@ -412,7 +412,7 @@ class AuraRobot {
             this.isListeningActive = false;
             this.handleHeardSpeech(completePhrase);
           }
-        }, 1300);
+        }, 650);
       };
 
       this.recognition.onerror = (event) => {
