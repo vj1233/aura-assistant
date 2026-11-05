@@ -313,7 +313,8 @@ class AuraRobot {
       // On mobile Android, continuous=false with auto-loop is 10x more stable than continuous=true!
       this.recognition.continuous = false;
       this.recognition.interimResults = false;
-      this.recognition.lang = 'en-US';
+      // en-IN recognizes 'AW-ruh', Indian English phonetics and pronunciation accurately
+      this.recognition.lang = localStorage.getItem('aura_lang') || 'en-IN';
 
       this.recognition.onstart = () => {
         this.isListeningActive = true;
@@ -354,10 +355,11 @@ class AuraRobot {
     const text = rawText.trim();
     const lower = text.toLowerCase();
 
-    // Check for Wake Word variations: "aura", "hey aura", "ora", "ara", "aurora"
-    const hasWakeWord = /(^|\b)(aura|ora|ara|aurora)(\b|$)/i.test(lower);
+    // Check for Wake Word variations: "aura", "awra", "awruh", "ora", "ara", "aara", "aurora"
+    const wakePattern = /(?:hey\s+)?(?:aura|awra|awruh|aw-ruh|ora|ara|aara|aur|aurora|order|auto)/i;
+    const hasWakeWord = wakePattern.test(lower);
 
-    // CASE 1: Currently waiting for a command after saying "Yes Vijay?"
+    // CASE 1: Currently waiting for a command after waking
     if (this.state === 'waiting_command') {
       clearTimeout(this.watchdogTimer);
       if (lower.includes('settings')) {
@@ -372,7 +374,7 @@ class AuraRobot {
     // CASE 2: Wake-word detected!
     if (hasWakeWord) {
       // Extract whatever command was spoken in the SAME sentence (e.g. "Aura check my IP")
-      const afterWake = lower.replace(/(?:hey\s+)?(?:aura|ora|ara|aurora)[,.\s]*/i, '').trim();
+      const afterWake = lower.replace(wakePattern, '').replace(/^[,.\s]+/, '').trim();
 
       if (afterWake.length > 1) {
         // Full command spoken together! E.g. "Aura check my IP"
@@ -383,10 +385,9 @@ class AuraRobot {
           this.processCommand(afterWake);
         }
       } else {
-        // Just "Aura" was spoken! Prompt Vijay with voice!
-        this.setState('waiting_command', 'AURA READY', 'Yes Vijay? I am listening...');
-        this.speak("Yes Vijay? What can I do for you?", () => {
-          // Immediately after speaking, ensure listener is primed for Vijay's reply
+        // Just "Aura" was spoken! Prompt with greeting
+        this.setState('waiting_command', 'AURA READY', 'Listening for your command...');
+        this.speak("Yes? What can I do for you?", () => {
           this.restartListener();
         });
       }
